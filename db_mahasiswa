@@ -1,0 +1,541 @@
+--(((function)))--
+<?php
+function pdo_connect_mysql() {
+    $DATABASE_HOST = 'localhost';
+    $DATABASE_USER = 'root';
+    $DATABASE_PASS = '';
+    $DATABASE_NAME = 'db_mahasiswa';
+    try {
+    	return new PDO('mysql:host=' . $DATABASE_HOST . ';dbname=' . $DATABASE_NAME . ';charset=utf8', $DATABASE_USER, $DATABASE_PASS);
+    } catch (PDOException $exception) {
+    	exit('Failed to connect to database!');
+    }
+}
+function template_header($title) {
+echo <<<EOT
+<!DOCTYPE html>
+<html>
+	<head>
+		<meta charset="utf-8">
+		<title>$title</title>
+		<link href="style.css" rel="stylesheet" type="text/css">
+		<link rel="stylesheet" href="https://use.fontawesome.com/releases/v5.7.1/css/all.css">
+	</head>
+	<body>
+    <nav class="navtop">
+    	<div>
+    		<h1>Website Title</h1>
+            <a href="index.php"><i class="fas fa-home"></i>Home</a>
+    		<a href="read.php"><i class="fas fa-address-book"></i>Account</a>
+    	</div>
+    </nav>
+EOT;
+}
+function template_footer() {
+echo <<<EOT
+    </body>
+</html>
+EOT;
+}
+?>
+
+
+
+--(((index)))--
+<?php
+include 'functions.php';
+?>
+
+<?=template_header('Home')?>
+
+<div class="content">
+	<h2>Home</h2>
+	<p>Selamat Datang!</p>
+</div>
+
+<?=template_footer()?>
+
+
+
+--(((create)))--
+<?php
+include 'functions.php';
+$pdo = pdo_connect_mysql();
+$msg = '';
+if (!empty($_POST)) {
+    
+    $nim = isset($_POST['nim']) && !empty($_POST['nim']) && $_POST['nim'] != 'auto' ? $_POST['nim'] : NULL;
+    $nama = isset($_POST['nama']) ? $_POST['nama'] : '';
+    $email = isset($_POST['email']) ? $_POST['email'] : '';
+    $jurusan = isset($_POST['jurusan']) ? $_POST['jurusan'] : '';
+    $fakultas = isset($_POST['fakultas']) ? $_POST['fakultas'] : '';
+    $gambar = isset($_POST['gambar']) ? $_POST['gambar'] : '';
+    $stmt = $pdo->prepare('INSERT INTO mahasiswa VALUES (?, ?, ?, ?, ?, ?)');
+    $stmt->execute([$nim, $nama, $email, $jurusan, $fakultas, $gambar]);
+    $msg = 'Berhasil membuat data!';
+}
+
+?>
+
+<?=template_header('Create')?>
+
+<div class="content update">
+	<h2>Buat data mahasiswa</h2>
+    <form action="create.php" method="post">
+        <label for="nim">nim</label>
+        <label for="nama">Nama</label>
+        <input type="text" name="nim" value="" nim="nim">
+        <input type="text" name="nama" nim="nama">
+        <label for="email">Email</label>
+        <label for="jurusan">jurusan</label>
+        <input type="text" name="email" nim="email">
+        <input type="text" name="jurusan" nim="jurusan">
+        <label for="fakultas">fakultas</label>
+        <label for="gambar">gambar</label>
+        <input type="text" name="fakultas" nim="fakultas">
+        <input type="text" name="gambar" nim="gambar">
+        <input type="submit" value="Buat">
+    </form>
+    <?php if ($msg): ?>
+    <p><?=$msg?></p>
+    <?php endif; ?>
+</div>
+
+<?=template_footer()?>
+
+
+
+--(((read)))--
+<?php
+include 'functions.php';
+$pdo = pdo_connect_mysql();
+$page = isset($_GET['page']) && is_numeric($_GET['page']) ? (int)$_GET['page'] : 1;
+$records_per_page = 5;
+$stmt = $pdo->prepare('SELECT * FROM mahasiswa ORDER BY nim LIMIT :current_page, :record_per_page');
+$stmt->bindValue(':current_page', ($page-1)*$records_per_page, PDO::PARAM_INT);
+$stmt->bindValue(':record_per_page', $records_per_page, PDO::PARAM_INT);
+$stmt->execute();
+$contacts = $stmt->fetchAll(PDO::FETCH_ASSOC);
+$num_contacts = $pdo->query('SELECT COUNT(*) FROM mahasiswa')->fetchColumn();
+?>
+
+<?=template_header('Read')?>
+
+<div class="content read">
+	<h2>Daftar</h2>
+	<a href="create.php" class="create-contact">Buat data mahasiswa</a>
+	<table>
+        <thead>
+            <tr>
+                <td>opsi</td>
+                <td>gambar</td>
+                <td>Nim</td>
+                <td>Nama</td>
+                <td>Email</td>
+                <td>jurusan</td>
+                <td>fakultas</td>
+
+            </tr>
+        </thead>
+        <tbody>
+            <?php foreach ($contacts as $contact): ?>
+            <tr>
+                <td class="actions">
+                    <a href="update.php?nim=<?=$contact['nim']?>" class="edit"><i class="fas fa-pen fa-xs"></i></a>
+                    <a href="delete.php?nim=<?=$contact['nim']?>" class="trash"><i class="fas fa-trash fa-xs"></i></a>
+                <td><img src="gambar/<?php echo $contact['gambar'] ; ?>" width="80"></td>
+                <td><?=$contact['nim']?></td>
+                <td><?=$contact['nama']?></td>
+                <td><?=$contact['email']?></td>
+                <td><?=$contact['jurusan']?></td>
+                <td><?=$contact['fakultas']?></td>
+
+                </td>
+            </tr>
+            <?php endforeach; ?>
+        </tbody>
+    </table>
+	<div class="pagination">
+		<?php if ($page > 1): ?>
+		<a href="read.php?page=<?=$page-1?>"><i class="fas fa-angle-double-left fa-sm"></i></a>
+		<?php endif; ?>
+		<?php if ($page*$records_per_page < $num_contacts): ?>
+		<a href="read.php?page=<?=$page+1?>"><i class="fas fa-angle-double-right fa-sm"></i></a>
+		<?php endif; ?>
+	</div>
+</div>
+
+<?=template_footer()?>
+
+
+
+--(((update)))--
+<?php
+
+include 'functions.php';
+$pdo = pdo_connect_mysql();
+$msg = '';
+if (isset($_GET['nim'])) {
+    if (!empty($_POST)) {
+        $nim = isset($_POST['nim']) ? $_POST['nim'] : NULL;
+        $nama = isset($_POST['nama']) ? $_POST['nama'] : '';
+        $email = isset($_POST['email']) ? $_POST['email'] : '';
+        $jurusan = isset($_POST['jurusan']) ? $_POST['jurusan'] : '';
+        $fakultas = isset($_POST['fakultas']) ? $_POST['fakultas'] : '';
+        $gambar = isset($_POST['gambar']) ? $_POST['gambar'] : '';
+        
+        $stmt = $pdo->prepare('UPDATE mahasiswa SET nim = ?, nama = ?, email = ?, jurusan = ?, fakultas = ?, gambar = ? WHERE nim = ?');
+        $stmt->execute([$nim, $nama, $email, $jurusan, $fakultas, $gambar, $_GET['nim']]);
+        $msg = 'Berhasil dihapus!';
+    }
+    $stmt = $pdo->prepare('SELECT * FROM mahasiswa WHERE nim = ?');
+    $stmt->execute([$_GET['nim']]);
+    $contact = $stmt->fetch(PDO::FETCH_ASSOC);
+    if (!$contact) {
+        exit('Contact doesn\'t exist with that nim!');
+    }
+} else {
+    exit('No nim specified!');
+}
+?>
+
+<?=template_header('Read')?>
+
+<div class="content update">
+	<h2>Update Contact #<?=$contact['nim']?></h2>
+    <form action="update.php?nim=<?=$contact['nim']?>" method="post">
+        <label for="nim">nim</label>
+        <label for="nama">Nama</label>
+        <input type="text" name="nim" value="<?=$contact['nim']?>" nim="nim">
+        <input type="text" name="nama" value="<?=$contact['nama']?>" nim="nama">
+        <label for="email">Email</label>
+        <label for="jurusan">Jurusan</label>
+        <input type="text" name="email" value="<?=$contact['email']?>" nim="email">
+        <input type="text" name="jurusan" value="<?=$contact['jurusan']?>" nim="jurusan">
+        <label for="fakultas">Fakultas</label>
+        <input type="text" name="fakultas" value="<?=$contact['fakultas']?>" nim="title">
+        <label for="gambar">gambar</label>
+        <input type="text" name="gambar" value="<?=$contact['gambar']?>" nim="title">
+        <input type="submit" value="Update">
+    </form>
+    <?php if ($msg): ?>
+    <p><?=$msg?></p>
+    <?php endif; ?>
+</div>
+
+<?=template_footer()?>
+
+
+
+--(((delete)))--
+<?php
+
+include 'functions.php';
+$pdo = pdo_connect_mysql();
+$msg = '';
+
+if (isset($_GET['nim'])) {
+    $stmt = $pdo->prepare('SELECT * FROM mahasiswa WHERE nim = ?');
+    $stmt->execute([$_GET['nim']]);
+    $contact = $stmt->fetch(PDO::FETCH_ASSOC);
+    if (!$contact) {
+        exit('Contact doesn\'t exist with that nim!');
+    }
+    
+    if (isset($_GET['confirm'])) {
+        if ($_GET['confirm'] == 'yes') {
+            
+            $stmt = $pdo->prepare('DELETE FROM mahasiswa WHERE nim = ?');
+            $stmt->execute([$_GET['nim']]);
+            $msg = 'Berhasil menghapus data!';
+        } else {
+            
+            header('Location: read.php');
+            exit;
+        }
+    }
+} else {
+    exit('No nim specified!');
+}
+?>
+
+<?=template_header('Delete')?>
+
+<div class="content delete">
+	<h2>Hapus Data #<?=$contact['nim']?></h2>
+    <?php if ($msg): ?>
+    <p><?=$msg?></p>
+    <?php else: ?>
+	<p>Yakin ingin menghapus data? #<?=$contact['nim']?>?</p>
+    <div class="yesno">
+        <a href="delete.php?nim=<?=$contact['nim']?>&confirm=yes">Yakin</a>
+        <a href="delete.php?nim=<?=$contact['nim']?>&confirm=no">Tidak</a>
+    </div>
+    <?php endif; ?>
+</div>
+
+<?=template_footer()?>
+
+
+
+--(((style)))--
+* {
+  	box-sizing: border-box;
+  	font-family: -apple-system, BlinkMacSystemFont, "segoe ui", roboto, oxygen, ubuntu, cantarell, "fira sans", "droid sans", "helvetica neue", Arial, sans-serif;
+  	font-size: 16px;
+  	-webkit-font-smoothing: antialiased;
+  	-moz-osx-font-smoothing: grayscale;
+}
+body {
+  	background-color: #FFFFFF;
+  	margin: 0;
+}
+.navtop {
+  	background-color: #47494c;
+  	height: 60px;
+  	width: 100%;
+  	border: 0;
+}
+.navtop div {
+  	display: flex;
+  	margin: 0 auto;
+  	width: 1000px;
+  	height: 100%;
+}
+.navtop div h1, .navtop div a {
+  	display: inline-flex;
+  	align-items: center;
+}
+.navtop div h1 {
+  	flex: 1;
+  	font-size: 24px;
+  	padding: 0;
+  	margin: 0;
+  	color: #ecf0f6;
+  	font-weight: normal;
+}
+.navtop div a {
+  	padding: 0 20px;
+  	text-decoration: none;
+  	color: #c5d2e5;
+  	font-weight: bold;
+}
+.navtop div a i {
+  	padding: 2px 8px 0 0;
+}
+.navtop div a:hover {
+  	color: #ecf0f6;
+}
+.content {
+  	width: 1000px;
+  	margin: 0 auto;
+}
+.content h2 {
+  	margin: 0;
+  	padding: 25px 0;
+  	font-size: 22px;
+  	border-bottom: 1px solid #ebebeb;
+  	color: #666666;
+}
+.read .create-contact {
+  	display: inline-block;
+  	text-decoration: none;
+  	background-color: #38b673;
+  	font-weight: bold;
+  	font-size: 14px;
+  	color: #FFFFFF;
+  	padding: 10px 15px;
+  	margin: 15px 0;
+}
+.read .create-contact:hover {
+  	background-color: #32a367;
+}
+.read .pagination {
+  	display: flex;
+  	justify-content: flex-end;
+}
+.read .pagination a {
+  	display: inline-block;
+  	text-decoration: none;
+  	background-color: #a5a7a9;
+  	font-weight: bold;
+  	color: #FFFFFF;
+  	padding: 5px 10px;
+  	margin: 15px 0 15px 5px;
+}
+.read .pagination a:hover {
+  	background-color: #999b9d;
+}
+.read table {
+  	width: 100%;
+  	padding-top: 30px;
+  	border-collapse: collapse;
+}
+.read table thead {
+  	background-color: #ebeef1;
+  	border-bottom: 1px solid #d3dae0;
+}
+.read table thead td {
+  	padding: 10px;
+  	font-weight: bold;
+  	color: #767779;
+  	font-size: 14px;
+}
+.read table tbody tr {
+  	border-bottom: 1px solid #d3dae0;
+}
+.read table tbody tr:nth-child(even) {
+  	background-color: #fbfcfc;
+}
+.read table tbody tr:hover {
+  	background-color: #47494c;
+}
+.read table tbody tr:hover td {
+  	color: #FFFFFF;
+}
+.read table tbody tr:hover td:nth-child(1) {
+  	color: #FFFFFF;
+}
+.read table tbody tr td {
+  	padding: 10px;
+}
+.read table tbody tr td:nth-child(1) {
+  	color: #a5a7a9;
+}
+.read table tbody tr td.actions {
+  	padding: 8px;
+  	text-align: right;
+}
+.read table tbody tr td.actions .edit, .read table tbody tr td.actions .trash {
+  	display: inline-flex;
+  	text-align: right;
+  	text-decoration: none;
+  	color: #FFFFFF;
+  	padding: 10px 12px;
+}
+.read table tbody tr td.actions .trash {
+  	background-color: #b73737;
+}
+.read table tbody tr td.actions .trash:hover {
+  	background-color: #a33131;
+}
+.read table tbody tr td.actions .edit {
+  	background-color: #37afb7;
+}
+.read table tbody tr td.actions .edit:hover {
+  	background-color: #319ca3;
+}
+.update form {
+  	padding: 15px 0;
+  	display: flex;
+  	flex-flow: wrap;
+}
+.update form label {
+  	display: inline-flex;
+  	width: 400px;
+  	padding: 10px 0;
+  	margin-right: 25px;
+}
+.update form input {
+  	padding: 10px;
+  	width: 400px;
+  	margin-right: 25px;
+  	margin-bottom: 15px;
+  	border: 1px solid #cccccc;
+}
+.update form input[type="submit"] {
+  	display: block;
+  	background-color: #38b673;
+  	border: 0;
+  	font-weight: bold;
+  	font-size: 14px;
+  	color: #FFFFFF;
+  	cursor: pointer;
+  	width: 200px;
+	margin-top: 15px;
+}
+.update form input[type="submit"]:hover {
+  	background-color: #32a367;
+}
+.delete .yesno {
+  	display: flex;
+}
+.delete .yesno a {
+  	display: inline-block;
+  	text-decoration: none;
+  	background-color: #38b673;
+  	font-weight: bold;
+  	color: #FFFFFF;
+  	padding: 10px 15px;
+  	margin: 15px 10px 15px 0;
+}
+.delete .yesno a:hover {
+  	background-color: #32a367;
+}
+
+
+
+--(((mahasiswa.sql)))---
+-- phpMyAdmin SQL Dump
+-- version 5.1.1
+-- https://www.phpmyadmin.net/
+--
+-- Host: 127.0.0.1
+-- Waktu pembuatan: 01 Okt 2022 pada 07.18
+-- Versi server: 10.4.22-MariaDB
+-- Versi PHP: 8.1.2
+
+SET SQL_MODE = "NO_AUTO_VALUE_ON_ZERO";
+START TRANSACTION;
+SET time_zone = "+00:00";
+
+
+/*!40101 SET @OLD_CHARACTER_SET_CLIENT=@@CHARACTER_SET_CLIENT */;
+/*!40101 SET @OLD_CHARACTER_SET_RESULTS=@@CHARACTER_SET_RESULTS */;
+/*!40101 SET @OLD_COLLATION_CONNECTION=@@COLLATION_CONNECTION */;
+/*!40101 SET NAMES utf8mb4 */;
+
+--
+-- Database: `db_mahasiswa`
+--
+
+-- --------------------------------------------------------
+
+--
+-- Struktur dari tabel `mahasiswa`
+--
+
+CREATE TABLE `mahasiswa` (
+  `nim` int(11) NOT NULL,
+  `nama` varchar(64) NOT NULL,
+  `email` varchar(64) NOT NULL,
+  `jurusan` varchar(64) NOT NULL,
+  `fakultas` varchar(64) NOT NULL,
+  `gambar` varchar(64) NOT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+--
+-- Dumping data untuk tabel `mahasiswa`
+--
+
+INSERT INTO `mahasiswa` (`nim`, `nama`, `email`, `jurusan`, `fakultas`, `gambar`) VALUES
+(701210123, 'M. Riski Menaldi', 'aldi.muhammadriski@gmail.com', 'Sistem Informasi', 'Sains dan Teknologi', 'mrm.JPG'),
+(701210038, 'Musyari', 'musyari@gmail.com', 'Sistem Informasi', 'Sains dan Teknologi', 'ari.jpeg'),
+(701210043, 'Muhammad Ziyan Bahruzin', 'ziyan@gmai.com', 'Sistem Informasi', 'Sains dan Teknologi', 'ziyan.JPG'),
+(701210127, 'Mhd. Aldi Fathoni', 'aldifathoni@gmail.com', 'Sistem Informasi', 'Sains dan Teknologi', 'aldi.JPG'),
+(701210126, 'Melan Sari', 'melansari@gmai.com', 'Sistem Informasi', 'Sains dan Teknologi', 'melan.JPG'),
+
+--
+-- Indexes for dumped tables
+--
+
+--
+-- Indeks untuk tabel `mahasiswa`
+--
+ALTER TABLE `mahasiswa`
+  ADD PRIMARY KEY (`nim`);
+COMMIT;
+
+/*!40101 SET CHARACTER_SET_CLIENT=@OLD_CHARACTER_SET_CLIENT */;
+/*!40101 SET CHARACTER_SET_RESULTS=@OLD_CHARACTER_SET_RESULTS */;
+/*!40101 SET COLLATION_CONNECTION=@OLD_COLLATION_CONNECTION */;
